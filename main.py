@@ -52,6 +52,11 @@ app.include_router(messages_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
 
 
+@app.get("/health", tags=["health"])
+async def health():
+    return {"status": "ok"}
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(
     ws: WebSocket,
