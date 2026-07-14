@@ -20,7 +20,11 @@ async def list_users(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    rows = (await session.execute(select(User).order_by(User.name))).scalars().all()
+    rows = (await session.execute(
+        select(User)
+        .where(User.organization_id == current_user.organization_id)
+        .order_by(User.name)
+    )).scalars().all()
     return rows
 
 

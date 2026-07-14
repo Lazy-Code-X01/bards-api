@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.auth import get_current_user
 from core.database import get_session
+from models.channel import Channel
 from models.message import Message
 from models.reaction import Reaction
 from models.user import User
@@ -17,6 +18,18 @@ from services.realtime import manager
 router = APIRouter(prefix="/messages", tags=["messages"])
 
 
+async def _resolve_message(
+    session: AsyncSession, message_id: str, user: User
+) -> Message:
+    msg = await session.get(Message, message_id)
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+    channel = await session.get(Channel, msg.channel_id)
+    if not channel or channel.organization_id != user.organization_id:
+        raise HTTPException(status_code=404, detail="Message not found")
+    return msg
+
+
 @router.post("/{message_id}/reactions", response_model=list[ReactionOut])
 async def toggle_reaction(
     message_id: str,
@@ -24,9 +37,7 @@ async def toggle_reaction(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    msg = await session.get(Message, message_id)
-    if not msg:
-        raise HTTPException(status_code=404, detail="Message not found")
+    msg = await _resolve_message(session, message_id, current_user)
 
     existing = (await session.execute(
         select(Reaction).where(
@@ -65,6 +76,8 @@ async def remove_reaction(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
+    await _resolve_message(session, message_id, current_user)
+
     existing = (await session.execute(
         select(Reaction).where(
             and_(
@@ -88,6 +101,8 @@ async def get_replies(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
+    await _resolve_message(session, message_id, current_user)
+
     rows = (await session.execute(
         select(Message)
         .where(and_(Message.parent_id == message_id, Message.deleted == False))
@@ -103,9 +118,7 @@ async def delete_message(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    msg = await session.get(Message, message_id)
-    if not msg:
-        raise HTTPException(status_code=404, detail="Message not found")
+    msg = await _resolve_message(session, message_id, current_user)
     if msg.sender_id != current_user.id:
         raise HTTPException(status_code=403, detail="Cannot delete another user's message")
 
@@ -119,9 +132,7 @@ async def toggle_pin(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    msg = await session.get(Message, message_id)
-    if not msg:
-        raise HTTPException(status_code=404, detail="Message not found")
+    msg = await _resolve_message(session, message_id, current_user)
 
     msg.pinned = not msg.pinned
     msg.pinned_by = current_user.id if msg.pinned else None

@@ -1,3 +1,4 @@
+from models.organization import Organization
 from models.user import User
 from models.channel import Channel, ChannelMember, ChannelRead
 from models.message import Message

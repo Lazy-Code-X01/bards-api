@@ -21,6 +21,18 @@ router = APIRouter(prefix="/channels", tags=["channels"])
 EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
 
+async def _resolve_channel(
+    session: AsyncSession, channel_id: str, user: User
+) -> Channel:
+    channel = await session.get(Channel, channel_id)
+    if not channel or channel.organization_id != user.organization_id:
+        raise HTTPException(status_code=404, detail="Channel not found")
+    member = await session.get(ChannelMember, (channel_id, user.id))
+    if not member:
+        raise HTTPException(status_code=403, detail="Not a member of this channel")
+    return channel
+
+
 async def _unread_count(session: AsyncSession, channel_id: str, user_id: str) -> int:
     read_row = await session.get(ChannelRead, (channel_id, user_id))
     since = read_row.last_read_at if read_row else EPOCH
@@ -45,7 +57,12 @@ async def list_channels(
     result = await session.execute(
         select(Channel)
         .join(ChannelMember, Channel.id == ChannelMember.channel_id)
-        .where(ChannelMember.user_id == current_user.id)
+        .where(
+            and_(
+                ChannelMember.user_id == current_user.id,
+                Channel.organization_id == current_user.organization_id,
+            )
+        )
         .order_by(Channel.name)
     )
     channels = result.scalars().all()
@@ -80,9 +97,7 @@ async def get_messages(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    member = await session.get(ChannelMember, (channel_id, current_user.id))
-    if not member:
-        raise HTTPException(status_code=403, detail="Not a member of this channel")
+    await _resolve_channel(session, channel_id, current_user)
 
     q = select(Message).where(
         and_(Message.channel_id == channel_id, Message.parent_id == None, Message.deleted == False)
@@ -107,9 +122,7 @@ async def send_message(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    member = await session.get(ChannelMember, (channel_id, current_user.id))
-    if not member:
-        raise HTTPException(status_code=403, detail="Not a member of this channel")
+    await _resolve_channel(session, channel_id, current_user)
 
     msg = Message(
         id=str(uuid.uuid4()),
@@ -137,6 +150,8 @@ async def mark_read(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
+    await _resolve_channel(session, channel_id, current_user)
+
     now = datetime.now(timezone.utc)
     read_row = await session.get(ChannelRead, (channel_id, current_user.id))
     if read_row:
@@ -152,9 +167,7 @@ async def get_members(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    member = await session.get(ChannelMember, (channel_id, current_user.id))
-    if not member:
-        raise HTTPException(status_code=403, detail="Not a member of this channel")
+    await _resolve_channel(session, channel_id, current_user)
 
     rows = (await session.execute(
         select(User)
@@ -172,9 +185,7 @@ async def get_pins(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    member = await session.get(ChannelMember, (channel_id, current_user.id))
-    if not member:
-        raise HTTPException(status_code=403, detail="Not a member of this channel")
+    await _resolve_channel(session, channel_id, current_user)
 
     rows = (await session.execute(
         select(Message)
