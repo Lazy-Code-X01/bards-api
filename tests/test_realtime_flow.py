@@ -9,9 +9,10 @@ def test_realtime_flow():
     async def _run():
         ws_url = "ws://localhost:8001/ws?channel_id=alpha-general&user_id=demo-org-a"
         async with websockets.connect(ws_url) as ws:
+            ORG_A = {"x-user-id": "demo-org-a", "x-organization-id": "org-alpha"}
             async with httpx.AsyncClient(
                 base_url="http://localhost:8001/api/v1",
-                headers={"x-user-id": "demo-org-a"},
+                headers=ORG_A,
                 timeout=10.0,
             ) as ac:
                 r = await ac.post("/channels/alpha-general/messages", json={"content": "realtime test"})
@@ -27,7 +28,7 @@ def test_realtime_flow():
 
             async with httpx.AsyncClient(
                 base_url="http://localhost:8001/api/v1",
-                headers={"x-user-id": "demo-org-a"},
+                headers=ORG_A,
                 timeout=10.0,
             ) as ac:
                 await ac.delete(f"/messages/{msg_id}")

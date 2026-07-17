@@ -1,3 +1,20 @@
+import httpx
+
+BASE_URL = "http://localhost:8001/api/v1"
+
+
+def test_wrong_org_header_rejected():
+    """Valid user + wrong x-organization-id must return 403, not 200 or 404."""
+    with httpx.Client(
+        base_url=BASE_URL,
+        headers={"x-user-id": "u1", "x-organization-id": "org-beta"},
+        timeout=10.0,
+    ) as c:
+        r = c.get("/channels")
+        assert r.status_code == 403
+        assert r.json()["detail"] == "Invalid user/organization pair"
+
+
 def test_org_a_sees_own_channels(client):
     r = client.get("/channels")
     assert r.status_code == 200

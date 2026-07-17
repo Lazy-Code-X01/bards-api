@@ -5,8 +5,8 @@ import pytest
 
 BASE_URL = "http://localhost:8001/api/v1"
 
-U1_HEADERS = {"x-user-id": "u1"}
-U2_HEADERS = {"x-user-id": "u2"}
+U1_HEADERS = {"x-user-id": "u1", "x-organization-id": "org-alpha"}
+U2_HEADERS = {"x-user-id": "u2", "x-organization-id": "org-alpha"}
 
 
 @pytest.fixture
