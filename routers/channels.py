@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +14,7 @@ from schemas.channel import ChannelListOut, ChannelOut
 from schemas.message import MessageOut, MessagesPageOut, SendMessageIn
 from schemas.user import UserOut
 from services.messages import build_message_out
+from services.notifications import dispatch_notifications
 from services.realtime import manager
 
 router = APIRouter(prefix="/channels", tags=["channels"])
@@ -119,6 +120,7 @@ async def get_messages(
 async def send_message(
     channel_id: str,
     body: SendMessageIn,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
@@ -141,6 +143,13 @@ async def send_message(
         "channel_id": channel_id,
         "data": out.model_dump(mode="json"),
     })
+    background_tasks.add_task(
+        dispatch_notifications,
+        channel_id,
+        current_user.id,
+        msg.id,
+        current_user.organization_id,
+    )
     return out
 
 

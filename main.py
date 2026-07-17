@@ -7,6 +7,7 @@ import models  # noqa: F401
 from core.database import AsyncSessionLocal, Base, engine
 from routers.channels import router as channels_router
 from routers.messages import router as messages_router
+from routers.notifications import router as notifications_router
 from routers.users import router as users_router
 from services.realtime import manager
 from services.seed import seed_if_empty
@@ -49,6 +50,7 @@ app.add_middleware(
 
 app.include_router(channels_router, prefix="/api/v1")
 app.include_router(messages_router, prefix="/api/v1")
+app.include_router(notifications_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
 
 
@@ -63,9 +65,9 @@ async def websocket_endpoint(
     channel_id: str = Query(...),
     user_id: str = Query(...),
 ):
-    await manager.connect(ws, channel_id)
+    await manager.connect(ws, channel_id, user_id)
     try:
         while True:
             await ws.receive_text()
     except WebSocketDisconnect:
-        manager.disconnect(ws, channel_id)
+        manager.disconnect(ws, channel_id, user_id)
